@@ -6,6 +6,11 @@ const FACES = [
   { key:'F', name:'Front', color:'Green' }, { key:'U', name:'Top', color:'White' }, { key:'R', name:'Right', color:'Red' },
   { key:'B', name:'Back', color:'Blue' }, { key:'D', name:'Bottom', color:'Yellow' }, { key:'L', name:'Left', color:'Orange' }
 ];
+const ORIENTATION = {
+  F:'Start here: hold this face directly toward you.', U:'Keep Front toward you, then rotate the cube upward to show the Top.',
+  R:'Return Front toward you, then rotate the cube left to show the Right side.', B:'Turn the cube around so the Back faces you.',
+  D:'Keep Front toward you, then rotate the cube downward to show the Bottom.', L:'Return Front toward you, then rotate the cube right to show the Left side.'
+};
 let size = 2, activeFace = 'F', selectedColor = 'Green', state = {}, solution = [], step = -1;
 let scene, camera, renderer, controls, cubeGroup, cubies = [];
 const faceTabs = document.querySelector('#face-tabs'), palette = document.querySelector('#palette'), faceGrid = document.querySelector('#face-grid');
@@ -16,16 +21,22 @@ function completedFaces() { return FACES.filter(f => state[f.key].every(Boolean)
 function paintValue(face, i) { return state[face][i]; }
 function renderControls() {
   document.querySelectorAll('.size-btn').forEach(b => b.className = `size-btn rounded-lg px-3 py-2 text-xs font-bold ${+b.dataset.size===size ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-white'}`);
-  faceTabs.innerHTML = FACES.map(f => `<button data-face="${f.key}" class="face-tab rounded-xl border px-2 py-2.5 text-left transition ${activeFace===f.key ? 'border-indigo-400 bg-indigo-500/15' : 'border-slate-700/60 bg-slate-900/50 hover:border-slate-600'}"><span class="block h-1.5 w-6 rounded-full" style="background:${COLORS[f.color]}"></span><span class="mt-1.5 block text-xs font-bold ${activeFace===f.key?'text-white':'text-slate-400'}">${f.name}</span></button>`).join('');
+  faceTabs.innerHTML = FACES.map((f,i) => { const done=state[f.key].every(Boolean); return `<button data-face="${f.key}" class="face-tab rounded-xl border px-2 py-2.5 text-left transition ${activeFace===f.key ? 'border-indigo-400 bg-indigo-500/15' : 'border-slate-700/60 bg-slate-900/50 hover:border-slate-600'}"><span class="block h-1.5 w-6 rounded-full" style="background:${COLORS[f.color]}"></span><span class="mt-1.5 flex items-center justify-between text-xs font-bold ${activeFace===f.key?'text-white':'text-slate-400'}">${f.name}<b class="text-emerald-400">${done?'✓':i+1}</b></span></button>`; }).join('');
   palette.innerHTML = Object.entries(COLORS).map(([name,color]) => `<button class="color-option flex items-center gap-2 rounded-lg border border-slate-700/60 bg-slate-900 px-2 py-2 text-left text-xs font-semibold ${selectedColor===name?'selected':''}" data-color="${name}"><i class="h-4 w-4 rounded-full border border-white/20" style="background:${color}"></i>${name}</button>`).join('');
   document.querySelector('#completion').textContent = `${completedFaces()} / 6`;
   document.querySelector('#face-title').textContent = `${FACES.find(f=>f.key===activeFace).name} face`;
+  document.querySelector('#orientation-tip').textContent = ORIENTATION[activeFace];
   document.querySelector('#face-count').textContent = `${state[activeFace].filter(Boolean).length} / ${size*size}`;
   faceGrid.style.gridTemplateColumns = `repeat(${size}, minmax(0,1fr))`;
   faceGrid.innerHTML = state[activeFace].map((color,i) => `<button class="face-cell ${color?'':'bg-slate-800'}" data-cell="${i}" aria-label="cell ${i+1}" style="background:${color ? COLORS[color] : ''}"></button>`).join('');
   faceTabs.querySelectorAll('[data-face]').forEach(b => b.onclick = () => { activeFace=b.dataset.face; renderControls(); });
   palette.querySelectorAll('[data-color]').forEach(b => b.onclick = () => { selectedColor=b.dataset.color; renderControls(); });
-  faceGrid.querySelectorAll('[data-cell]').forEach(b => b.onclick = () => { state[activeFace][+b.dataset.cell] = selectedColor; renderControls(); syncCubeColors(); });
+  faceGrid.querySelectorAll('[data-cell]').forEach(b => b.onclick = () => { const wasDone=state[activeFace].every(Boolean); state[activeFace][+b.dataset.cell] = selectedColor; syncCubeColors(); if(!wasDone && state[activeFace].every(Boolean)){ const here=FACES.findIndex(f=>f.key===activeFace); const next=FACES.slice(here+1).find(f=>!state[f.key].every(Boolean)); if(next) activeFace=next.key; } renderControls(); });
+  const currentIndex=FACES.findIndex(f=>f.key===activeFace);
+  const prevFace=document.querySelector('#prev-face'), nextFace=document.querySelector('#next-face');
+  prevFace.disabled=currentIndex===0; nextFace.disabled=currentIndex===FACES.length-1;
+  prevFace.onclick=()=>{if(currentIndex>0){activeFace=FACES[currentIndex-1].key;renderControls();}};
+  nextFace.onclick=()=>{if(currentIndex<FACES.length-1){activeFace=FACES[currentIndex+1].key;renderControls();}};
   updateSolutionUI();
 }
 function updateSolutionUI() {
