@@ -65,6 +65,13 @@
       </section>
       <footer class="mt-5 flex flex-wrap items-center justify-between gap-2 px-1 text-xs text-slate-600"><span>Built for deliberate, visual practice.</span><span class="mono">CUBEFLOW / v1.0</span></footer>
     </main>
-    <script type="module" src="./app.js"></script>
+    <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.module.js"
+    }
+  }
+</script>
+<script type="module" src="./app.js"></script>
   </body>
 </html>
