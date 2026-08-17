@@ -11,32 +11,34 @@ const ORIENTATION = {
   R:'Return Front toward you, then rotate the cube left to show the Right side.', B:'Turn the cube around so the Back faces you.',
   D:'Keep Front toward you, then rotate the cube downward to show the Bottom.', L:'Return Front toward you, then rotate the cube right to show the Left side.'
 };
-let size = 2, activeFace = 'F', selectedColor = 'Green', state = {}, solution = [], step = -1;
+let size = 2, activeFace = 'F', selectedColor = 'Green', state = {}, confirmed = new Set(), solution = [], step = -1;
 let scene, camera, renderer, controls, cubeGroup, cubies = [];
 const faceTabs = document.querySelector('#face-tabs'), palette = document.querySelector('#palette'), faceGrid = document.querySelector('#face-grid');
 const readout = document.querySelector('#move-readout');
 
-function resetState() { state = Object.fromEntries(FACES.map(f => [f.key, Array(size * size).fill(null)])); solution=[]; step=-1; }
-function completedFaces() { return FACES.filter(f => state[f.key].every(Boolean)).length; }
+function resetState() { state = Object.fromEntries(FACES.map(f => [f.key, Array(size * size).fill(null)])); confirmed = new Set(); solution=[]; step=-1; }
+function completedFaces() { return confirmed.size; }
 function paintValue(face, i) { return state[face][i]; }
 function renderControls() {
   document.querySelectorAll('.size-btn').forEach(b => b.className = `size-btn rounded-lg px-3 py-2 text-xs font-bold ${+b.dataset.size===size ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-white'}`);
-  faceTabs.innerHTML = FACES.map((f,i) => { const done=state[f.key].every(Boolean); return `<button data-face="${f.key}" class="face-tab rounded-xl border px-2 py-2.5 text-left transition ${activeFace===f.key ? 'border-indigo-400 bg-indigo-500/15' : 'border-slate-700/60 bg-slate-900/50 hover:border-slate-600'}"><span class="block h-1.5 w-6 rounded-full" style="background:${COLORS[f.color]}"></span><span class="mt-1.5 flex items-center justify-between text-xs font-bold ${activeFace===f.key?'text-white':'text-slate-400'}">${f.name}<b class="text-emerald-400">${done?'✓':i+1}</b></span></button>`; }).join('');
+  const currentIndex=FACES.findIndex(f=>f.key===activeFace);
+  faceTabs.innerHTML = FACES.map((f,i) => { const done=confirmed.has(f.key), unlocked=i<=currentIndex || done; return `<button data-face="${f.key}" ${unlocked?'':'disabled'} class="face-tab rounded-xl border px-2 py-2.5 text-left transition disabled:cursor-not-allowed disabled:opacity-35 ${activeFace===f.key ? 'border-indigo-400 bg-indigo-500/15' : 'border-slate-700/60 bg-slate-900/50 hover:border-slate-600'}"><span class="block h-1.5 w-6 rounded-full" style="background:${COLORS[f.color]}"></span><span class="mt-1.5 flex items-center justify-between text-xs font-bold ${activeFace===f.key?'text-white':'text-slate-400'}">${f.name}<b class="text-emerald-400">${done?'✓':i+1}</b></span></button>`; }).join('');
   palette.innerHTML = Object.entries(COLORS).map(([name,color]) => `<button class="color-option flex items-center gap-2 rounded-lg border border-slate-700/60 bg-slate-900 px-2 py-2 text-left text-xs font-semibold ${selectedColor===name?'selected':''}" data-color="${name}"><i class="h-4 w-4 rounded-full border border-white/20" style="background:${color}"></i>${name}</button>`).join('');
   document.querySelector('#completion').textContent = `${completedFaces()} / 6`;
   document.querySelector('#face-title').textContent = `${FACES.find(f=>f.key===activeFace).name} face`;
-  document.querySelector('#orientation-tip').textContent = ORIENTATION[activeFace];
+  document.querySelector('#orientation-tip').textContent = `Step ${currentIndex+1} of 6 · ${ORIENTATION[activeFace]}`;
   document.querySelector('#face-count').textContent = `${state[activeFace].filter(Boolean).length} / ${size*size}`;
   faceGrid.style.gridTemplateColumns = `repeat(${size}, minmax(0,1fr))`;
   faceGrid.innerHTML = state[activeFace].map((color,i) => `<button class="face-cell ${color?'':'bg-slate-800'}" data-cell="${i}" aria-label="cell ${i+1}" style="background:${color ? COLORS[color] : ''}"></button>`).join('');
-  faceTabs.querySelectorAll('[data-face]').forEach(b => b.onclick = () => { activeFace=b.dataset.face; renderControls(); });
+  faceTabs.querySelectorAll('[data-face]').forEach(b => b.onclick = () => { if(!b.disabled){ activeFace=b.dataset.face; renderControls(); } });
   palette.querySelectorAll('[data-color]').forEach(b => b.onclick = () => { selectedColor=b.dataset.color; renderControls(); });
-  faceGrid.querySelectorAll('[data-cell]').forEach(b => b.onclick = () => { const wasDone=state[activeFace].every(Boolean); state[activeFace][+b.dataset.cell] = selectedColor; syncCubeColors(); if(!wasDone && state[activeFace].every(Boolean)){ const here=FACES.findIndex(f=>f.key===activeFace); const next=FACES.slice(here+1).find(f=>!state[f.key].every(Boolean)); if(next) activeFace=next.key; } renderControls(); });
-  const currentIndex=FACES.findIndex(f=>f.key===activeFace);
+  faceGrid.querySelectorAll('[data-cell]').forEach(b => b.onclick = () => { state[activeFace][+b.dataset.cell] = selectedColor; confirmed.delete(activeFace); solution=[]; step=-1; syncCubeColors(); renderControls(); });
   const prevFace=document.querySelector('#prev-face'), nextFace=document.querySelector('#next-face');
-  prevFace.disabled=currentIndex===0; nextFace.disabled=currentIndex===FACES.length-1;
+  const filled=state[activeFace].every(Boolean), finalFace=currentIndex===FACES.length-1;
+  prevFace.disabled=currentIndex===0; nextFace.disabled=!filled;
+  nextFace.textContent = !filled ? `Fill ${size*size-state[activeFace].filter(Boolean).length} more square${size*size-state[activeFace].filter(Boolean).length===1?'':'s'}` : finalFace ? 'Finish scan ✓' : `Save ${FACES[currentIndex].name} & Next →`;
   prevFace.onclick=()=>{if(currentIndex>0){activeFace=FACES[currentIndex-1].key;renderControls();}};
-  nextFace.onclick=()=>{if(currentIndex<FACES.length-1){activeFace=FACES[currentIndex+1].key;renderControls();}};
+  nextFace.onclick=()=>{ if(!filled) return; confirmed.add(activeFace); if(!finalFace) activeFace=FACES[currentIndex+1].key; renderControls(); };
   updateSolutionUI();
 }
 function updateSolutionUI() {
@@ -89,6 +91,6 @@ function turnMove(move) {
 }
 async function changeStep(direction) { const next=step+direction; if(next<0||next>=solution.length) return; step=next; updateSolutionUI(); const move=solution[step]; readout.textContent=`Move ${step+1} / ${solution.length}  ·  ${move}`; await turnMove(move); }
 document.querySelectorAll('.size-btn').forEach(b=>b.onclick=()=>{size=+b.dataset.size; activeFace='F'; selectedColor='Green'; resetState(); buildCube(); renderControls(); readout.textContent='New cube ready to inspect';});
-document.querySelector('#clear-face').onclick=()=>{state[activeFace].fill(null); solution=[]; step=-1; renderControls(); syncCubeColors();};
+document.querySelector('#clear-face').onclick=()=>{ if(confirm('Start the cube scan over? This clears all six faces.')){ resetState(); activeFace='F'; renderControls(); syncCubeColors(); readout.textContent='New scan ready'; } };
 document.querySelector('#next-btn').onclick=()=>changeStep(1); document.querySelector('#prev-btn').onclick=()=>changeStep(-1);
 resetState(); setupScene(); buildCube(); renderControls();
