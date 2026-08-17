@@ -15,7 +15,7 @@ const ORIENTATION = {
   L:'Put your reference face toward you again. Turn the cube RIGHT until the left-hand side comes forward.',
   B:'Turn the cube all the way around. Scan the one remaining unseen face.'
 };
-let size = 2, activeFace = 'F', selectedColor = 'Green', state = {}, confirmed = new Set(), solution = [], step = -1;
+let size = 2, activeFace = 'F', selectedColor = 'Green', state = {}, confirmed = new Set(), solution = [], step = -1, solving = false, cubeSolverReady = false;
 let scene, camera, renderer, controls, cubeGroup, cubies = [];
 const faceTabs = document.querySelector('#face-tabs'), palette = document.querySelector('#palette'), faceGrid = document.querySelector('#face-grid');
 const readout = document.querySelector('#move-readout');
@@ -42,22 +42,18 @@ function renderControls() {
   prevFace.disabled=currentIndex===0; nextFace.disabled=!filled;
   nextFace.textContent = !filled ? `Fill ${size*size-state[activeFace].filter(Boolean).length} more square${size*size-state[activeFace].filter(Boolean).length===1?'':'s'}` : finalFace ? 'Finish scan ✓' : `Save ${FACES[currentIndex].name} & Next →`;
   prevFace.onclick=()=>{if(currentIndex>0){activeFace=FACES[currentIndex-1].key;renderControls();}};
-  nextFace.onclick=()=>{ if(!filled) return; confirmed.add(activeFace); if(!finalFace) activeFace=FACES[currentIndex+1].key; renderControls(); };
+  nextFace.onclick=()=>{ if(!filled) return; confirmed.add(activeFace); if(!finalFace) activeFace=FACES[currentIndex+1].key; renderControls(); if(finalFace) solveCurrentCube(); };
   updateSolutionUI();
 }
 function updateSolutionUI() {
   const done = completedFaces() === 6, status=document.querySelector('#solution-status'), summary=document.querySelector('#solution-summary');
-  if (done && !solution.length) solution = generateSolution();
-  status.textContent = done ? `${solution.length} moves ready` : 'Awaiting scan';
-  summary.innerHTML = done ? `<span class="font-semibold text-slate-200">Scan complete.</span><br><span class="text-slate-400">A visual route has been prepared. Use the controls to advance one face turn at a time.</span>` : 'Fill all six faces to generate a guided visual solve.';
+  status.textContent = solving ? 'Finding solution…' : !done ? 'Awaiting scan' : size !== 3 ? '3×3 solver only' : solution.length ? `${solution.length} moves ready` : 'Ready to solve';
+  summary.innerHTML = !done ? 'Finish and save all six faces to validate the cube.' : size !== 3 ? 'Real solving is currently available for 3×3 only.' : solving ? 'Checking your cube state and calculating an efficient route…' : solution.length ? `<span class="font-semibold text-slate-200">Verified solve ready.</span>` : 'Scan complete. Press Finish scan to calculate a real solve.';
   document.querySelector('#prev-btn').disabled = !solution.length || step < 0;
   document.querySelector('#next-btn').disabled = !solution.length || step >= solution.length-1;
 }
-function generateSolution() {
-  // A concise deterministic turn route offers a readable visual walkthrough for every supported order.
-  const base = ['R', 'U', "R'", "U'", 'F', 'R', "F'", 'L', 'U', "L'", 'D', 'R', "D'"];
-  return base.slice(0, size === 2 ? 8 : size === 3 ? 11 : 13);
-}
+function loadScript(src){return new Promise((ok,bad)=>{const s=document.createElement('script');s.src=src;s.onload=ok;s.onerror=bad;document.head.appendChild(s)})}
+async function solveCurrentCube(){if(size!==3||solving||solution.length)return;solving=true;updateSolutionUI();try{if(!window.Cube){await loadScript('https://cdn.jsdelivr.net/npm/cubejs@1.3.2/lib/cube.js');await loadScript('https://cdn.jsdelivr.net/npm/cubejs@1.3.2/lib/solve.js')}if(!cubeSolverReady){Cube.initSolver();cubeSolverReady=true}const centers=Object.fromEntries(FACES.map(f=>[state[f.key][4],f.key]));const order=['U','R','F','D','L','B'];const facelets=order.flatMap(f=>state[f].map(c=>centers[c])).join('');solution=Cube.fromString(facelets).solve().trim().split(/\s+/)}catch(e){document.querySelector('#solution-status').textContent='Scan needs review';document.querySelector('#solution-summary').textContent='This scan is not physically solvable. Check every face and its orientation.'}solving=false;updateSolutionUI()}
 function setupScene() {
   const stage=document.querySelector('#cube-stage'); scene=new THREE.Scene();
   camera=new THREE.PerspectiveCamera(40, stage.clientWidth/stage.clientHeight, .1, 100); camera.position.set(5.4,4.7,6.8);
