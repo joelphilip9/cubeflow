@@ -2,14 +2,18 @@ import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.165.0/build/three.m
 import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.165.0/examples/jsm/controls/OrbitControls.js';
 
 const COLORS = { White:'#f8fafc', Yellow:'#facc15', Red:'#ef4444', Orange:'#f97316', Blue:'#3b82f6', Green:'#22c55e' };
+const EMPTY_STICKER = '#293247';
 const FACES = [
   { key:'F', name:'Front', color:'Green' }, { key:'U', name:'Top', color:'White' }, { key:'R', name:'Right', color:'Red' },
-  { key:'B', name:'Back', color:'Blue' }, { key:'D', name:'Bottom', color:'Yellow' }, { key:'L', name:'Left', color:'Orange' }
+  { key:'D', name:'Bottom', color:'Yellow' }, { key:'L', name:'Left', color:'Orange' }, { key:'B', name:'Back', color:'Blue' }
 ];
 const ORIENTATION = {
-  F:'Start here: hold this face directly toward you.', U:'Keep Front toward you, then rotate the cube upward to show the Top.',
-  R:'Return Front toward you, then rotate the cube left to show the Right side.', B:'Turn the cube around so the Back faces you.',
-  D:'Keep Front toward you, then rotate the cube downward to show the Bottom.', L:'Return Front toward you, then rotate the cube right to show the Left side.'
+  F:'Choose any face and hold it directly toward you. This is your reference face — do not lose it.',
+  U:'Keep your reference face toward you. Roll the cube DOWN so the top face comes forward, then scan that face.',
+  R:'Put your reference face toward you again. Turn the cube LEFT until the right-hand side comes forward.',
+  D:'Put your reference face toward you again. Roll the cube UP so the bottom face comes forward.',
+  L:'Put your reference face toward you again. Turn the cube RIGHT until the left-hand side comes forward.',
+  B:'Turn the cube all the way around. Scan the one remaining unseen face.'
 };
 let size = 2, activeFace = 'F', selectedColor = 'Green', state = {}, confirmed = new Set(), solution = [], step = -1;
 let scene, camera, renderer, controls, cubeGroup, cubies = [];
@@ -59,8 +63,10 @@ function setupScene() {
   camera=new THREE.PerspectiveCamera(40, stage.clientWidth/stage.clientHeight, .1, 100); camera.position.set(5.4,4.7,6.8);
   renderer=new THREE.WebGLRenderer({antialias:true, alpha:true}); renderer.setPixelRatio(Math.min(devicePixelRatio,2)); stage.replaceChildren(renderer.domElement);
   controls=new OrbitControls(camera,renderer.domElement); controls.enableDamping=true; controls.dampingFactor=.06; controls.minDistance=4; controls.maxDistance=13; controls.target.set(0,0,0);
-  scene.add(new THREE.HemisphereLight(0xd8e4ff,0x101321,2.1)); const key=new THREE.DirectionalLight(0xffffff,2.5); key.position.set(5,7,6); scene.add(key);
-  const rim=new THREE.PointLight(0x7588ff,12,16); rim.position.set(-5,2,-4); scene.add(rim);
+  scene.add(new THREE.HemisphereLight(0xe8f0ff,0x697898,2.8));
+  const key=new THREE.DirectionalLight(0xffffff,3.1); key.position.set(5,7,6); scene.add(key);
+  const rim=new THREE.PointLight(0x7588ff,15,18); rim.position.set(-5,2,-4); scene.add(rim);
+  const underside=new THREE.PointLight(0xb9d2ff,7,14); underside.position.set(0,-5,4); scene.add(underside);
   window.addEventListener('resize', () => { camera.aspect=stage.clientWidth/stage.clientHeight; camera.updateProjectionMatrix(); renderer.setSize(stage.clientWidth,stage.clientHeight); });
   function tick(){ requestAnimationFrame(tick); controls.update(); renderer.render(scene,camera); } tick();
 }
@@ -70,7 +76,7 @@ function buildCube() {
   const dark=new THREE.MeshStandardMaterial({color:0x161923, roughness:.45, metalness:.15});
   for(let x=0;x<size;x++) for(let y=0;y<size;y++) for(let z=0;z<size;z++) {
     const piece=new THREE.Group(), body=new THREE.Mesh(new THREE.BoxGeometry(unit-gap,unit-gap,unit-gap),dark); piece.add(body);
-    const add=(pos,rot,face,index) => { const sticker=new THREE.Mesh(new THREE.PlaneGeometry(.77,.77),stickerMaterial(COLORS[state[face]?.[index] || FACES.find(f=>f.key===face).color])); sticker.position.copy(pos); sticker.rotation.set(...rot); sticker.userData={face,index}; piece.add(sticker); };
+    const add=(pos,rot,face,index) => { const sticker=new THREE.Mesh(new THREE.PlaneGeometry(.77,.77),stickerMaterial(COLORS[state[face]?.[index]] || EMPTY_STICKER)); sticker.position.copy(pos); sticker.rotation.set(...rot); sticker.userData={face,index}; piece.add(sticker); };
     const idx = (a,b) => a*size+b;
     if(z===size-1) add(new THREE.Vector3(0,0,.466),[0,0,0],'F',idx(size-1-y,x));
     if(z===0) add(new THREE.Vector3(0,0,-.466),[0,Math.PI,0],'B',idx(size-1-y,size-1-x));
@@ -82,7 +88,7 @@ function buildCube() {
   }
   scene.add(cubeGroup); document.querySelector('#cube-title').textContent=`${size} × ${size} cube`;
 }
-function syncCubeColors(){ cubies.forEach(piece => piece.children.forEach(m => { if(m.userData.face) m.material.color.set(COLORS[state[m.userData.face][m.userData.index] || FACES.find(f=>f.key===m.userData.face).color]); })); }
+function syncCubeColors(){ cubies.forEach(piece => piece.children.forEach(m => { if(m.userData.face) m.material.color.set(COLORS[state[m.userData.face][m.userData.index]] || EMPTY_STICKER); })); }
 function turnMove(move) {
   const key=move[0], inverse=move.includes("'"); const axis={R:'x',L:'x',U:'y',D:'y',F:'z',B:'z'}[key]; const max={R:1,L:-1,U:1,D:-1,F:1,B:-1}[key] * ((size-1)/2);
   const layer=cubies.filter(p => Math.abs(p.position[axis]-max)<.1); const group=new THREE.Group(); layer.forEach(p=>group.attach(p)); cubeGroup.add(group);
