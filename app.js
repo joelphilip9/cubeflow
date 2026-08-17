@@ -3,12 +3,12 @@ import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.165.0/exampl
 
 const COLORS={White:'#f8fafc',Yellow:'#facc15',Red:'#ef4444',Orange:'#f97316',Blue:'#3b82f6',Green:'#22c55e'}, EMPTY='#273147';
 const FACES=[
- {key:'F',name:'Front',color:'Green',cue:'1 · FRONT',tip:'Hold your first face straight toward you.'},
- {key:'U',name:'Top',color:'White',cue:'2 · ROLL ↓',tip:'Keep Front toward you. Roll the cube down until Top faces you.'},
- {key:'R',name:'Right',color:'Red',cue:'3 · TURN ←',tip:'Put Front toward you. Turn the cube left until Right faces you.'},
- {key:'D',name:'Bottom',color:'Yellow',cue:'4 · ROLL ↑',tip:'Put Front toward you. Roll the cube up until Bottom faces you.'},
- {key:'L',name:'Left',color:'Orange',cue:'5 · TURN →',tip:'Put Front toward you. Turn the cube right until Left faces you.'},
- {key:'B',name:'Back',color:'Blue',cue:'6 · TURN AROUND',tip:'Turn the cube around and scan the only remaining unseen face.'}
+ {key:'F',name:'Front',color:'Green',cue:'1 · START HERE',arrow:'◎',turn:'Keep still'},
+ {key:'U',name:'Top',color:'White',cue:'2 · ROLL THE CUBE',arrow:'↓',turn:'Roll down'},
+ {key:'R',name:'Right',color:'Red',cue:'3 · TURN THE CUBE',arrow:'←',turn:'Turn left'},
+ {key:'D',name:'Bottom',color:'Yellow',cue:'4 · ROLL THE CUBE',arrow:'↑',turn:'Roll up'},
+ {key:'L',name:'Left',color:'Orange',cue:'5 · TURN THE CUBE',arrow:'→',turn:'Turn right'},
+ {key:'B',name:'Back',color:'Blue',cue:'6 · TURN THE CUBE',arrow:'↻',turn:'Turn around'}
 ];
 const face=Object.fromEntries(FACES.map(x=>[x.key,x])), $=s=>document.querySelector(s);
 let size=3,active='F',paint='Green',state={},saved=new Set(),solution=[],moveAt=-1,solving=false,solverReady=false,message=null;
@@ -23,9 +23,9 @@ function render(){
  $('#palette').innerHTML=Object.entries(COLORS).map(([n,c])=>`<button class="swatch ${n===paint?'on':''}" data-color="${n}"><i style="background:${c}"></i>${n}</button>`).join('');
  $('#palette').querySelectorAll('button').forEach(b=>b.onclick=()=>{paint=b.dataset.color;render()});
  const x=face[active],i=current(),count=state[active].filter(Boolean).length;
- $('#scan-count').textContent=`${saved.size} / 6 saved`;$('#face-title').textContent=`${x.name} face`;$('#face-count').textContent=`${count} / ${size*size}`;$('#scan-cue').textContent=x.cue;$('#scan-tip').textContent=x.tip;$('#preview-name').textContent=x.name;
+ $('#scan-count').textContent=`${saved.size} / 6 saved`;$('#face-title').textContent=`${x.name} face`;$('#face-count').textContent=`${count} / ${size*size}`;$('#scan-cue').textContent=x.cue;$('#scan-tip').innerHTML=`<b style="font-size:34px;line-height:1;vertical-align:middle">${x.arrow}</b><span style="margin-left:10px;vertical-align:middle">${x.turn}</span>`;$('#preview-name').textContent=x.name;
  $('#face-grid').style.gridTemplateColumns=`repeat(${size},1fr)`;$('#face-grid').innerHTML=state[active].map((c,n)=>`<button class="cell" data-cell="${n}" style="background:${c?COLORS[c]:EMPTY}"></button>`).join('');
- $('#face-grid').querySelectorAll('button').forEach(b=>b.onclick=()=>{state[active][+b.dataset.cell]=paint;saved.delete(active);solution=[];moveAt=-1;message=null;sync();render()});
+ $('#face-grid').querySelectorAll('button').forEach(b=>b.onclick=()=>{let faceAtClick=active,stepAtClick=current();state[active][+b.dataset.cell]=paint;saved.delete(active);solution=[];moveAt=-1;message=null;sync();if(full(faceAtClick)){saved.add(faceAtClick);say(`${face[faceAtClick].name} saved ✓`);setTimeout(()=>{if(active!==faceAtClick||!full(faceAtClick))return;if(stepAtClick<5){active=FACES[stepAtClick+1].key;say(`${face[faceAtClick].name} saved ✓ · next: ${face[active].name}`);render()}else{render();solve()}},260)}render()});
  $('#previous-face').disabled=i===0;$('#previous-face').onclick=()=>{if(i){active=FACES[i-1].key;render()}};
  const next=$('#save-next'),missing=size*size-count;next.disabled=!!missing;next.textContent=missing?`Fill ${missing} more`:i===5?'Validate & solve →':`Save ${x.name} & continue →`;next.onclick=()=>{if(!full(active))return;saved.add(active);if(i<5){active=FACES[i+1].key;render()}else{render();solve()}};renderSolution()
 }
@@ -34,7 +34,7 @@ function valid(){if(new Set(FACES.map(x=>state[x.key][4])).size!==6)return'Each 
 function load(src){return new Promise((yes,no)=>{let s=document.createElement('script');s.src=src;s.onload=yes;s.onerror=()=>no(Error('solver download failed'));document.head.append(s)})}
 function facelets(){const centers=Object.fromEntries(FACES.map(x=>[state[x.key][4],x.key]));return['U','R','F','D','L','B'].flatMap(k=>state[k].map(c=>centers[c])).join('')}
 async function solve(){if(size!==3||solving)return;let problem=valid();if(problem){message={title:'Scan needs review',copy:problem};renderSolution();return}if(FACES.every(x=>state[x.key].every(c=>c===state[x.key][4]))){solution=[];moveAt=-1;message={title:'Already solved',copy:'Nice — every face is already uniform. There are no moves to make.'};renderSolution();return}solving=true;message=null;renderSolution();try{if(!window.Cube){await load('https://cdn.jsdelivr.net/npm/cubejs@1.3.2/lib/cube.js');await load('https://cdn.jsdelivr.net/npm/cubejs@1.3.2/lib/solve.js')}if(!solverReady){window.Cube.initSolver();solverReady=true}let route=window.Cube.fromString(facelets()).solve().trim();solution=route?route.split(/\s+/):[];moveAt=-1;if(!solution.length)message={title:'Already solved',copy:'Nice — every face is already uniform. There are no moves to make.'}}catch(e){console.warn(e);message={title:'Scan needs review',copy:'This does not form a legal cube in this orientation. Review the arrows and re-check the face colors.'}}finally{solving=false;renderSolution()}}
-function reason(m,i){let phase=i<solution.length*.34?'builds and preserves matched pieces':i<solution.length*.72?'positions the remaining pieces':'finishes the last-layer arrangement';let way=m.includes('2')?'twice':m.includes("'")?'counter-clockwise':'clockwise';return`${m[0]} turns ${way}; it ${phase}.`}
+function reason(m,i){let phase=i<solution.length*.34?'sets up and preserves pieces already in place':i<solution.length*.72?'moves the remaining pieces into their correct positions':'finishes the last layer without undoing earlier work';let way=m.includes('2')?'twice':m.includes("'")?'counter-clockwise':'clockwise';return`${m[0]} turns ${way}; this ${phase}.`}
 function inverse(m){return m.includes('2')?m:m.includes("'")?m[0]:m+"'"}
 async function step(dir){let target=dir>0?moveAt+1:moveAt;if(target<0||target>=solution.length)return;await turn(dir>0?solution[target]:inverse(solution[target]));moveAt+=dir;say(dir>0?`Move ${moveAt+1}: ${solution[moveAt]} · ${reason(solution[moveAt],moveAt)}`:`Reversed move ${target+1}.`);renderSolution()}
 function say(s){$('#move-readout').textContent=s}
